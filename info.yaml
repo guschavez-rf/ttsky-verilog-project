@@ -1,39 +1,37 @@
 # Tiny Tapeout project information
 project:
-  title:        ""      # Project title
-  author:       ""      # Your name
-  discord:      ""      # Your discord username, for communication and automatically assigning you a Tapeout role (optional)
-  description:  ""      # One line description of what your project does
-  language:     "Verilog" # other examples include SystemVerilog, Amaranth, VHDL, etc
-  clock_hz:     0       # Clock frequency in Hz (or 0 if not applicable)
+  title:        "Jitter Metrics & Pulse Analyzer"
+  author:       "Gustavo Ismael Chavez Mamani"
+  discord:      ""      # Puedes dejarlo vacío si no usas Discord
+  description:  "High-speed Jitter measurement tool with UART interface and hardware gating"
+  language:     "Verilog"
+  clock_hz:     50000000 # Actualizado a 50 MHz para máxima resolución y estabilidad
 
-  # How many tiles your design occupies? A single tile is about 167x108 uM.
-  tiles: "1x1"          # Valid values: 1x1, 1x2, 2x2, 3x2, 4x2, 6x2 or 8x2
+  # Tu diseño de 16 bits y UART cabe perfectamente en 1x1 tiles.
+  tiles: "1x1"          
 
-  # Your top module name must start with "tt_um_". Make it unique by including your github username:
-  top_module:  "tt_um_example"
+  # Top module con el prefijo obligatorio
+  top_module:  "tt_um_Medidor_Jitter"
 
-  # List your project's source files here.
-  # Source files must be in ./src and you must list each source file separately, one per line.
-  # Don't forget to also update `PROJECT_SOURCES` in test/Makefile.
+  # Listado de archivos fuente
+  # Nota: Si pusiste todo en un solo archivo, deja solo project.v
   source_files:
     - "project.v"
 
-# The pinout of your project. Leave unused pins blank. DO NOT delete or add any pins.
-# This section is for the datasheet/website. Use descriptive names (e.g., RX, TX, MOSI, SCL, SEG_A, etc.).
+# Definición de la interfaz física (Datasheet)
 pinout:
   # Inputs
-  ui[0]: ""
-  ui[1]: ""
-  ui[2]: ""
-  ui[3]: ""
-  ui[4]: ""
+  ui[0]: "rx_pin"    # Recepción UART (Comandos)
+  ui[1]: "sig_in"    # Señal de datos a analizar (Target)
+  ui[2]: ""          # Libre
+  ui[3]: "gate_pin"  # Habilitador de captura (GATE)
+  ui[4]: "ref_clk"   # Reloj de referencia del MCU
   ui[5]: ""
   ui[6]: ""
   ui[7]: ""
 
   # Outputs
-  uo[0]: ""
+  uo[0]: "tx_pin"    # Transmisión UART (Reportes)
   uo[1]: ""
   uo[2]: ""
   uo[3]: ""
@@ -42,7 +40,7 @@ pinout:
   uo[6]: ""
   uo[7]: ""
 
-  # Bidirectional pins
+  # Bidirectional pins (No los usamos, se dejan vacíos)
   uio[0]: ""
   uio[1]: ""
   uio[2]: ""
