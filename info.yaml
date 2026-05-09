@@ -2,10 +2,10 @@
 project:
   title:        "Jitter Metrics & Pulse Analyzer"
   author:       "Gustavo Ismael Chavez Mamani"
-  discord:      ""      # Puedes dejarlo vacío si no usas Discord
+  discord:      ""      
   description:  "High-speed Jitter measurement tool with UART interface and hardware gating"
   language:     "Verilog"
-  clock_hz:     50000000 # Actualizado a 50 MHz para máxima resolución y estabilidad
+  clock_hz:     50000000 
 
   # Tu diseño de 16 bits y UART cabe perfectamente en 1x1 tiles.
   tiles: "1x1"          
@@ -13,17 +13,21 @@ project:
   # Top module con el prefijo obligatorio
   top_module:  "tt_um_Medidor_Jitter"
 
-  # Listado de archivos fuente
-  # Nota: Si pusiste todo en un solo archivo, deja solo project.v
+  # Listado de archivos fuente actualizados según tu estructura de carpetas
   source_files:
-    - "project.v"
+    - "tt_um_Medidor_Jitter.v"
+    - "Banco_Registros.v"
+    - "FSM_Jitter.v"
+    - "Mod_Matematico.v"
+    - "Motor_Captura.v"
+    - "UART_V1.v"
 
 # Definición de la interfaz física (Datasheet)
 pinout:
   # Inputs
   ui[0]: "rx_pin"    # Recepción UART (Comandos)
   ui[1]: "sig_in"    # Señal de datos a analizar (Target)
-  ui[2]: ""          # Libre
+  ui[2]: ""          
   ui[3]: "gate_pin"  # Habilitador de captura (GATE)
   ui[4]: "ref_clk"   # Reloj de referencia del MCU
   ui[5]: ""
@@ -40,7 +44,7 @@ pinout:
   uo[6]: ""
   uo[7]: ""
 
-  # Bidirectional pins (No los usamos, se dejan vacíos)
+  # Bidirectional pins
   uio[0]: ""
   uio[1]: ""
   uio[2]: ""
