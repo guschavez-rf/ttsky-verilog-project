@@ -1,43 +1,41 @@
+// ===============================================================================
+// MODULO: FSM_Jitter
+// ===============================================================================
 module FSM_Jitter (
     input  wire        clk,
     input  wire        rst,
     
-    // Interfaz con UART_RX
     input  wire [7:0]  rx_data,
-    input  wire        rx_done,       // hecho_rx del UART
-    output reg         rx_next,       // next_ready para el UART
+    input  wire        rx_done,       
+    output reg         rx_next,       
     
-    // Interfaz con UART_TX
     input  wire        tx_ready,
-    output reg         tx_start,      // datos_validos para el UART
-    output reg  [7:0]  tx_data,       // datos_enviar para el UART
+    output reg         tx_start,      
+    output reg  [7:0]  tx_data,       
     
-    // Interfaz con Banco_Registros (Control)
     output reg         we_uart,
     output reg  [2:0]  addr_uart,
     output reg  [15:0] data_out_uart,
     output reg         clear_metrics,
     
-    // Interfaz con Banco_Registros (Lectura)
-    input  wire [15:0] reg_ideal,
-    input  wire [15:0] reg_tol,
-    input  wire [15:0] reg_max,
-    input  wire [15:0] reg_min,
-    input  wire [15:0] reg_tot,
-    input  wire [15:0] reg_err
+    // CORRECCIÓN: Entradas ajustadas a 15 bits
+    input  wire [14:0] reg_ideal,
+    input  wire [14:0] reg_tol,
+    input  wire [14:0] reg_max,
+    input  wire [14:0] reg_min,
+    input  wire [14:0] reg_tot,
+    input  wire [14:0] reg_err
 );
 
-    // Códigos ASCII de las instrucciones
     localparam SYNC_CHAR = 8'h24; // '$'
-    localparam CMD_I     = 8'h49; // 'I' - Set Ideal
-    localparam CMD_T     = 8'h54; // 'T' - Set Tolerancia
-    localparam CMD_M     = 8'h4D; // 'M' - Get Max
-    localparam CMD_N     = 8'h4E; // 'N' - Get Min
-    localparam CMD_S     = 8'h53; // 'S' - Get Total
-    localparam CMD_G     = 8'h47; // 'G' - Get Errores (Cambiado de 'E' a 'G')
-    localparam CMD_R     = 8'h52; // 'R' - Reset Métricas
+    localparam CMD_I     = 8'h49; // 'I' 
+    localparam CMD_T     = 8'h54; // 'T' 
+    localparam CMD_M     = 8'h4D; // 'M' 
+    localparam CMD_N     = 8'h4E; // 'N' 
+    localparam CMD_S     = 8'h53; // 'S' 
+    localparam CMD_G     = 8'h47; // 'G' 
+    localparam CMD_R     = 8'h52; // 'R' 
 
-    // Máquina de Estados
     localparam IDLE         = 4'd0;
     localparam WAIT_CMD     = 4'd1;
     localparam WAIT_DATA_H  = 4'd2;
@@ -51,7 +49,7 @@ module FSM_Jitter (
     localparam ACK_RX       = 4'd10;
 
     reg [3:0]  estado;
-    reg [3:0]  estado_retorno; // Para saber a dónde volver tras un ACK
+    reg [3:0]  estado_retorno; 
     reg [7:0]  comando_actual;
     reg [7:0]  temp_high;
     reg [15:0] data_to_send;
@@ -64,7 +62,6 @@ module FSM_Jitter (
             we_uart       <= 0;
             clear_metrics <= 0;
         end else begin
-            // Valores por defecto (se limpian automáticamente en 1 ciclo de clk)
             tx_start      <= 0;
             we_uart       <= 0;
             clear_metrics <= 0;
@@ -77,7 +74,7 @@ module FSM_Jitter (
                             estado_retorno <= WAIT_CMD;
                             estado         <= ACK_RX;
                         end else begin
-                            estado_retorno <= IDLE; // Ignora basura, exige el '$'
+                            estado_retorno <= IDLE; 
                             estado         <= ACK_RX;
                         end
                     end
@@ -89,10 +86,10 @@ module FSM_Jitter (
                         if (rx_data == CMD_I || rx_data == CMD_T) begin
                             estado_retorno <= WAIT_DATA_H;
                         end else if (rx_data == CMD_R) begin
-                            clear_metrics  <= 1; // Pulso de limpieza
+                            clear_metrics  <= 1; 
                             estado_retorno <= IDLE;
                         end else begin
-                            estado_retorno <= LOAD_READ; // Asume comando de lectura
+                            estado_retorno <= LOAD_READ; 
                         end
                         estado <= ACK_RX;
                     end
@@ -108,7 +105,7 @@ module FSM_Jitter (
 
                 WAIT_DATA_L: begin
                     if (rx_done && !rx_next) begin
-                        data_out_uart  <= {temp_high, rx_data}; // Ensambla 16 bits
+                        data_out_uart  <= {temp_high, rx_data}; 
                         addr_uart      <= (comando_actual == CMD_I) ? 3'h1 : 3'h2;
                         estado_retorno <= EXEC_WRITE;
                         estado         <= ACK_RX;
@@ -116,36 +113,37 @@ module FSM_Jitter (
                 end
 
                 EXEC_WRITE: begin
-                    we_uart <= 1; // Pulso de escritura al banco
+                    we_uart <= 1; 
                     estado  <= IDLE;
                 end
 
                 LOAD_READ: begin
                     case (comando_actual)
-                        CMD_M: data_to_send <= reg_max;
-                        CMD_N: data_to_send <= reg_min;
-                        CMD_S: data_to_send <= reg_tot;
-                        CMD_G: data_to_send <= reg_err; // Ahora responde al comando 'G'
-                        default: data_to_send <= 16'hFFFF; // Error
+                        // CORRECCIÓN: Concatenamos un 0 a la izquierda para armar los 16 bits del envío
+                        CMD_M: data_to_send <= {1'b0, reg_max};
+                        CMD_N: data_to_send <= {1'b0, reg_min};
+                        CMD_S: data_to_send <= {1'b0, reg_tot};
+                        CMD_G: data_to_send <= {1'b0, reg_err};
+                        default: data_to_send <= 16'hFFFF; 
                     endcase
                     estado <= SEND_HIGH;
                 end
 
                 SEND_HIGH: begin
                     if (tx_ready) begin
-                        tx_data  <= data_to_send[15:8]; // Envía MSB
+                        tx_data  <= data_to_send[15:8]; 
                         tx_start <= 1;
                         estado   <= WAIT_TX_H;
                     end
                 end
 
                 WAIT_TX_H: begin
-                    if (!tx_ready) estado <= SEND_LOW; // Espera a que el TX empiece a trabajar
+                    if (!tx_ready) estado <= SEND_LOW; 
                 end
 
                 SEND_LOW: begin
                     if (tx_ready) begin
-                        tx_data  <= data_to_send[7:0];  // Envía LSB
+                        tx_data  <= data_to_send[7:0];  
                         tx_start <= 1;
                         estado   <= WAIT_TX_L;
                     end
@@ -155,15 +153,13 @@ module FSM_Jitter (
                     if (!tx_ready) estado <= IDLE;
                 end
 
-                // --- Estado Auxiliar para el Handshake del UART_RX ---
                 ACK_RX: begin
-                    rx_next <= 1; // Pide al UART que baje su bandera de 'rx_done'
+                    rx_next <= 1; 
                     if (!rx_done) begin
                         rx_next <= 0;
-                        estado  <= estado_retorno; // Vuelve a donde estaba
+                        estado  <= estado_retorno; 
                     end
                 end
-
             endcase
         end
     end

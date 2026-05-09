@@ -1,14 +1,11 @@
-// ===============================================================================
-// MODULO: Motor_Captura
-// ===============================================================================
 module Motor_Captura (
     input  wire        clk,
     input  wire        rst,
     input  wire        gate,          
     input  wire        ref_clk,       
     input  wire        sig_in,        
-    input  wire [15:0] reg_ideal,     
-    output reg  [15:0] t_medido,      
+    input  wire [14:0] reg_ideal,     
+    output reg  [14:0] t_medido,      
     output reg         trigger_math,  
     output reg         timeout_error  
 );
@@ -33,7 +30,7 @@ module Motor_Captura (
     wire sig_any_edge    = sig_s2 ^ sig_s3;         
     wire gate_active     = gate_s2;
 
-    reg [16:0] contador; // 17 bits para evitar truncamiento en el watchdog
+    reg [14:0] contador; // Reducido a 15 bits
     reg        buscando_dato; 
 
     always @(posedge clk or posedge rst) begin
@@ -56,17 +53,19 @@ module Motor_Captura (
                     buscando_dato <= 1; 
                 end 
                 else if (sig_any_edge && buscando_dato) begin
-                    t_medido      <= contador[15:0];
+                    t_medido      <= contador;
                     trigger_math  <= 1;
                     buscando_dato <= 0; 
                 end 
                 else if (buscando_dato) begin
-                    contador <= contador + 17'd1;
-                    
-                    if (contador >= ({1'b0, reg_ideal} << 1)) begin
+                    // Watchdog simplificado: Si el contador llega al máximo, error.
+                    // Esto ahorra un comparador de magnitud configurable.
+                    if (contador == 15'h7FFF) begin
                         timeout_error <= 1;
                         buscando_dato <= 0;
                         contador      <= 0;
+                    end else begin
+                        contador <= contador + 15'd1;
                     end
                 end
             end

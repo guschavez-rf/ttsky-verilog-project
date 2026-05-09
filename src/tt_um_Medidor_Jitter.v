@@ -1,29 +1,22 @@
 // ===============================================================================
-// MODULO TOP: tt_um_Medidor_Jitter (Adaptado para Tiny Tapeout)
+// MODULO TOP: tt_um_Medidor_Jitter
 // ===============================================================================
 module tt_um_Medidor_Jitter (
-    input  wire [7:0] ui_in,    // Entradas dedicadas
-    output wire [7:0] uo_out,   // Salidas dedicadas
-    input  wire [7:0] uio_in,   // IOs bidireccionales: path de entrada
-    output wire [7:0] uio_out,  // IOs bidireccionales: path de salida
-    output wire [7:0] uio_oe,   // IOs bidireccionales: path de habilitación (1=salida, 0=entrada)
-    input  wire       ena,      // Se ignora (siempre es 1 cuando está encendido)
-    input  wire       clk,      // Reloj del sistema
-    input  wire       rst_n     // Reset (Activo en bajo)
+    input  wire [7:0] ui_in,    
+    output wire [7:0] uo_out,   
+    input  wire [7:0] uio_in,   
+    output wire [7:0] uio_out,  
+    output wire [7:0] uio_oe,   
+    input  wire       ena,      
+    input  wire       clk,      
+    input  wire       rst_n     
 );
 
-    // =======================================================================
-    // CONFIGURACIÓN DE VELOCIDAD (AQUÍ DEFINES LOS 50 MHz Y EL UART)
-    // =======================================================================
-    localparam CLK_FREQ = 50000000; // <-- Cambiado a 50 MHz
-    localparam BAUDRATE = 115200;   // <-- Velocidad de 115200 baudios
+    localparam CLK_FREQ = 50000000; 
+    localparam BAUDRATE = 115200;   
 
-    // Inversor de Reset para usar lógica positiva internamente
     wire rst = ~rst_n;
 
-    // =======================================================================
-    // MAPEO DE PINES (TINY TAPEOUT -> TU LÓGICA)
-    // =======================================================================
     wire rx_pin   = ui_in[0];
     wire sig_in   = ui_in[1];
     wire gate_pin = ui_in[3];
@@ -32,14 +25,10 @@ module tt_um_Medidor_Jitter (
     wire tx_pin;
     assign uo_out[0] = tx_pin;
 
-    // Aterrizar pines no usados (OBLIGATORIO en diseño de ASICs)
     assign uo_out[7:1] = 7'b0;
     assign uio_out     = 8'b0;
     assign uio_oe      = 8'b0;
 
-    // =======================================================================
-    // CABLES INTERNOS (ROUTING)
-    // =======================================================================
     wire [7:0] uart_rx_data;
     wire       uart_rx_done;
     wire       uart_rx_next;
@@ -53,18 +42,14 @@ module tt_um_Medidor_Jitter (
     wire [15:0] fsm_data;
     wire        fsm_clear;
 
-    wire [15:0] reg_ideal, reg_tol, reg_max, reg_min, reg_tot, reg_err;
-    wire [15:0] t_medido;
+    // CORRECCIÓN: Cables reducidos a 15 bits [14:0]
+    wire [14:0] reg_ideal, reg_tol, reg_max, reg_min, reg_tot, reg_err;
+    wire [14:0] t_medido;
     wire        trigger_math;
     wire        timeout_error;
-    wire [15:0] actual_jitter;
+    wire [14:0] actual_jitter;
     wire        is_error;
 
-    // =======================================================================
-    // INSTANCIACIÓN DE MÓDULOS
-    // =======================================================================
-
-    // 1. Módulo de Comunicaciones (Acá se inyectan los parámetros de velocidad)
     UART_V1 #(
         .clk_frec_fpga(CLK_FREQ), 
         .tasa_baudios(BAUDRATE)
@@ -82,7 +67,6 @@ module tt_um_Medidor_Jitter (
         .hecho_tx(uart_tx_done)
     );
 
-    // 2. Cerebro Administrativo
     FSM_Jitter U_FSM (
         .clk(clk),
         .rst(rst),
@@ -104,7 +88,6 @@ module tt_um_Medidor_Jitter (
         .reg_err(reg_err)
     );
 
-    // 3. Memoria del Sistema
     Banco_Registros U_BANCO (
         .clk(clk),
         .rst(rst),
@@ -125,7 +108,6 @@ module tt_um_Medidor_Jitter (
         .reg_err(reg_err)
     );
 
-    // 4. Captura Física
     Motor_Captura U_MOTOR (
         .clk(clk),
         .rst(rst),
@@ -138,7 +120,6 @@ module tt_um_Medidor_Jitter (
         .timeout_error(timeout_error)
     );
 
-    // 5. Calculadora Lógica
     Mod_Matematico U_MATH (
         .t_medido(t_medido),
         .reg_ideal(reg_ideal),
