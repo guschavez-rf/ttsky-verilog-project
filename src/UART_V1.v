@@ -58,11 +58,11 @@ module UART_V1 #(
 endmodule
 
 // ===============================================================================
-// MODULO: UART_GenBaudio
+// MODULO: UART_GenBaudio (Optimizado a 8 bits)
 // ===============================================================================
 module UART_GenBaudio #(
-    parameter clk_frec_fpga = 27000000,
-    parameter tasa_baudios = 9600
+    parameter clk_frec_fpga = 50000000,
+    parameter tasa_baudios = 115200
 )(
     input clk,
     input rst,
@@ -73,12 +73,12 @@ module UART_GenBaudio #(
 
     localparam clk_contador = (clk_frec_fpga/(tasa_baudios*16));
 
-    reg [15:0] contador;
-    reg [3:0]  subcnt;
+    reg [7:0] contador; // REDUCIDO DE 16 a 8 BITS (Ahorra 8 FFs)
+    reg [3:0] subcnt;
 
     always @(posedge clk or posedge rst) begin
         if (rst) begin
-            contador <= 16'b0;
+            contador <= 8'b0;
             subcnt   <= 4'b0;
             pulso    <= 1'b0;
             pulsox16 <= 1'b0;
@@ -88,7 +88,7 @@ module UART_GenBaudio #(
             pulsox16 <= 1'b0;
 
             if (contador == clk_contador - 1) begin
-                contador <= 16'b0;
+                contador <= 8'b0;
                 pulsox16 <= 1'b1;
                 if (subcnt == 4'd15) begin
                     subcnt <= 4'b0;
@@ -99,17 +99,16 @@ module UART_GenBaudio #(
                 end 
             end 
             else begin
-                contador <= contador + 16'b1;
+                contador <= contador + 8'b1;
             end
         end
         else begin
-            contador <= 16'b0;
+            contador <= 8'b0;
             subcnt   <= 4'b0;
             pulso    <= 1'b0;
             pulsox16 <= 1'b0;
         end 
     end
-
 endmodule
 
 // ===============================================================================
