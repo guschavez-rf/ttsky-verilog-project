@@ -42,7 +42,7 @@ module tt_um_Medidor_Jitter (
     wire [15:0] fsm_data;
     wire        fsm_clear;
 
-    // CORRECCIÓN: Cables reducidos a 15 bits [14:0]
+    // CORRECCIÓN: Cables reducidos a 15 bits [14:0] manteniendo reg_min
     wire [14:0] reg_ideal, reg_tol, reg_max, reg_min, reg_tot, reg_err;
     wire [14:0] t_medido;
     wire        trigger_math;
@@ -127,5 +127,10 @@ module tt_um_Medidor_Jitter (
         .actual_jitter(actual_jitter),
         .is_error(is_error)
     );
+
+    // =======================================================================
+    // SUMIDERO DE SEÑALES NO USADAS (Mantiene limpio el diseño para OpenLane)
+    // =======================================================================
+    wire _unused = &{ena, ui_in[7:5], ui_in[2], uio_in, uart_tx_done, 1'b0};
 
 endmodule

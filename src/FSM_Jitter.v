@@ -1,41 +1,46 @@
 // ===============================================================================
-// MODULO: FSM_Jitter
+// MODULO: FSM_Jitter (Optimizado con Multiplexor Combinacional a 15 bits)
 // ===============================================================================
 module FSM_Jitter (
     input  wire        clk,
     input  wire        rst,
     
+    // Interfaz UART_RX
     input  wire [7:0]  rx_data,
     input  wire        rx_done,       
     output reg         rx_next,       
     
+    // Interfaz UART_TX
     input  wire        tx_ready,
     output reg         tx_start,      
     output reg  [7:0]  tx_data,       
     
+    // Interfaz Banco_Registros (Control)
     output reg         we_uart,
     output reg  [2:0]  addr_uart,
     output reg  [15:0] data_out_uart,
     output reg         clear_metrics,
     
-    // CORRECCIÓN: Entradas ajustadas a 15 bits
+    // CORRECCIÓN: Entradas devueltas a 15 bits para igualar al Top y al Banco
     input  wire [14:0] reg_ideal,
     input  wire [14:0] reg_tol,
     input  wire [14:0] reg_max,
     input  wire [14:0] reg_min,
     input  wire [14:0] reg_tot,
-    input  wire [14:0] reg_err
+    input  wire [14:0] reg_err 
 );
 
+    // Comandos ASCII
     localparam SYNC_CHAR = 8'h24; // '$'
-    localparam CMD_I     = 8'h49; // 'I' 
-    localparam CMD_T     = 8'h54; // 'T' 
-    localparam CMD_M     = 8'h4D; // 'M' 
-    localparam CMD_N     = 8'h4E; // 'N' 
-    localparam CMD_S     = 8'h53; // 'S' 
-    localparam CMD_G     = 8'h47; // 'G' 
-    localparam CMD_R     = 8'h52; // 'R' 
+    localparam CMD_I     = 8'h49; // 'I'
+    localparam CMD_T     = 8'h54; // 'T'
+    localparam CMD_M     = 8'h4D; // 'M'
+    localparam CMD_N     = 8'h4E; // 'N'
+    localparam CMD_S     = 8'h53; // 'S'
+    localparam CMD_G     = 8'h47; // 'G'
+    localparam CMD_R     = 8'h52; // 'R'
 
+    // Estados de la FSM
     localparam IDLE         = 4'd0;
     localparam WAIT_CMD     = 4'd1;
     localparam WAIT_DATA_H  = 4'd2;
@@ -52,7 +57,12 @@ module FSM_Jitter (
     reg [3:0]  estado_retorno; 
     reg [7:0]  comando_actual;
     reg [7:0]  temp_high;
-    reg [15:0] data_to_send;
+
+    // CORRECCIÓN: Multiplexor limpio leyendo los 15 bits y restaurando CMD_N
+    wire [14:0] mux_data = (comando_actual == CMD_M) ? reg_max :
+                           (comando_actual == CMD_N) ? reg_min :
+                           (comando_actual == CMD_S) ? reg_tot :
+                           (comando_actual == CMD_G) ? reg_err : 15'h7FFF;
 
     always @(posedge clk or posedge rst) begin
         if (rst) begin
@@ -61,6 +71,7 @@ module FSM_Jitter (
             tx_start      <= 0;
             we_uart       <= 0;
             clear_metrics <= 0;
+            tx_data       <= 8'h0;
         end else begin
             tx_start      <= 0;
             we_uart       <= 0;
@@ -118,20 +129,12 @@ module FSM_Jitter (
                 end
 
                 LOAD_READ: begin
-                    case (comando_actual)
-                        // CORRECCIÓN: Concatenamos un 0 a la izquierda para armar los 16 bits del envío
-                        CMD_M: data_to_send <= {1'b0, reg_max};
-                        CMD_N: data_to_send <= {1'b0, reg_min};
-                        CMD_S: data_to_send <= {1'b0, reg_tot};
-                        CMD_G: data_to_send <= {1'b0, reg_err};
-                        default: data_to_send <= 16'hFFFF; 
-                    endcase
                     estado <= SEND_HIGH;
                 end
 
                 SEND_HIGH: begin
                     if (tx_ready) begin
-                        tx_data  <= data_to_send[15:8]; 
+                        tx_data  <= {1'b0, mux_data[14:8]}; // MSB
                         tx_start <= 1;
                         estado   <= WAIT_TX_H;
                     end
@@ -143,7 +146,7 @@ module FSM_Jitter (
 
                 SEND_LOW: begin
                     if (tx_ready) begin
-                        tx_data  <= data_to_send[7:0];  
+                        tx_data  <= mux_data[7:0]; // LSB
                         tx_start <= 1;
                         estado   <= WAIT_TX_L;
                     end
@@ -160,6 +163,7 @@ module FSM_Jitter (
                         estado  <= estado_retorno; 
                     end
                 end
+                default: estado <= IDLE;
             endcase
         end
     end
