@@ -1,5 +1,5 @@
 // ===============================================================================
-// MODULO: FSM_Jitter (Optimizado con Multiplexor Combinacional a 15 bits)
+// MODULO: FSM_Jitter (Optimizado con Multiplexor Combinacional)
 // ===============================================================================
 module FSM_Jitter (
     input  wire        clk,
@@ -21,26 +21,22 @@ module FSM_Jitter (
     output reg  [15:0] data_out_uart,
     output reg         clear_metrics,
     
-    // CORRECCIÓN: Entradas devueltas a 15 bits para igualar al Top y al Banco
+    // Entradas ajustadas a la salida del Banco
     input  wire [14:0] reg_ideal,
     input  wire [14:0] reg_tol,
     input  wire [14:0] reg_max,
-    input  wire [14:0] reg_min,
-    input  wire [14:0] reg_tot,
-    input  wire [14:0] reg_err 
+    input  wire [11:0] reg_tot, // 12 bits
+    input  wire [11:0] reg_err  // 12 bits
 );
 
-    // Comandos ASCII
     localparam SYNC_CHAR = 8'h24; // '$'
     localparam CMD_I     = 8'h49; // 'I'
     localparam CMD_T     = 8'h54; // 'T'
     localparam CMD_M     = 8'h4D; // 'M'
-    localparam CMD_N     = 8'h4E; // 'N'
     localparam CMD_S     = 8'h53; // 'S'
     localparam CMD_G     = 8'h47; // 'G'
     localparam CMD_R     = 8'h52; // 'R'
 
-    // Estados de la FSM
     localparam IDLE         = 4'd0;
     localparam WAIT_CMD     = 4'd1;
     localparam WAIT_DATA_H  = 4'd2;
@@ -58,11 +54,10 @@ module FSM_Jitter (
     reg [7:0]  comando_actual;
     reg [7:0]  temp_high;
 
-    // CORRECCIÓN: Multiplexor limpio leyendo los 15 bits y restaurando CMD_N
+    // Multiplexor rellenando los valores de 12 bits con ceros a la izquierda
     wire [14:0] mux_data = (comando_actual == CMD_M) ? reg_max :
-                           (comando_actual == CMD_N) ? reg_min :
-                           (comando_actual == CMD_S) ? reg_tot :
-                           (comando_actual == CMD_G) ? reg_err : 15'h7FFF;
+                           (comando_actual == CMD_S) ? {3'b000, reg_tot} :
+                           (comando_actual == CMD_G) ? {3'b000, reg_err} : 15'h7FFF;
 
     always @(posedge clk or posedge rst) begin
         if (rst) begin

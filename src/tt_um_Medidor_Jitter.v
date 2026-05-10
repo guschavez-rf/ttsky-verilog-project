@@ -42,8 +42,9 @@ module tt_um_Medidor_Jitter (
     wire [15:0] fsm_data;
     wire        fsm_clear;
 
-    // CORRECCIÓN: Cables reducidos a 15 bits [14:0] manteniendo reg_min
-    wire [14:0] reg_ideal, reg_tol, reg_max, reg_min, reg_tot, reg_err;
+    // Cables ajustados: reg_min eliminado, contadores a 12 bits
+    wire [14:0] reg_ideal, reg_tol, reg_max;
+    wire [11:0] reg_tot, reg_err; 
     wire [14:0] t_medido;
     wire        trigger_math;
     wire        timeout_error;
@@ -83,7 +84,6 @@ module tt_um_Medidor_Jitter (
         .reg_ideal(reg_ideal),
         .reg_tol(reg_tol),
         .reg_max(reg_max),
-        .reg_min(reg_min),
         .reg_tot(reg_tot),
         .reg_err(reg_err)
     );
@@ -103,7 +103,6 @@ module tt_um_Medidor_Jitter (
         .reg_ideal(reg_ideal),
         .reg_tol(reg_tol),
         .reg_max(reg_max),
-        .reg_min(reg_min),
         .reg_tot(reg_tot),
         .reg_err(reg_err)
     );
