@@ -18,7 +18,6 @@ module Banco_Registros (
     output reg  [11:0] reg_err  
 );
 
-    // Eliminamos gate_s1 y gate_s2. Usamos gate directamente.
     always @(posedge clk or posedge rst) begin
         if (rst) begin
             reg_ideal <= 15'd1000; reg_tol <= 15'd50;
@@ -31,7 +30,7 @@ module Banco_Registros (
 
             if (clear_metrics) begin
                 reg_max <= 15'h0; reg_tot <= 12'h0; reg_err <= 12'h0;
-            end else if (gate) begin // 'gate' ya viene sincronizado del motor
+            end else if (gate) begin // Usamos gate directo
                 if (trigger_math) begin
                     if (reg_tot != 12'hFFF) reg_tot <= reg_tot + 12'd1;
                     if (actual_jitter > reg_max) reg_max <= actual_jitter;
