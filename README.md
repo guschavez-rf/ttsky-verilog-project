@@ -1,42 +1,59 @@
 ![](../../workflows/gds/badge.svg) ![](../../workflows/docs/badge.svg) ![](../../workflows/test/badge.svg) ![](../../workflows/fpga/badge.svg)
 
-# Tiny Tapeout Verilog Project Template
+# Jitter Meter with UART Interface
 
-- [Read the documentation for project](docs/info.md)
+This project is a high-precision digital Jitter Meter designed for the **Tiny Tapeout** platform using the Sky130 PDK. The system measures the time deviation of an input signal relative to an ideal reference and allows metric management via UART commands.
 
-## What is Tiny Tapeout?
+## Technical Specifications
 
-Tiny Tapeout is an educational project that aims to make it easier and cheaper than ever to get your digital and analog designs manufactured on a real chip.
+- **Clock Frequency:** 50 MHz.
+- **Communication:** UART at 115200 baud (8N1).
+- **Dimensions:** 1x1 Tile (Tiny Tapeout).
+- **Precision:** 15-bit measurement registers.
+- **Statistics:** 12-bit counters with **saturation logic at 4095** to prevent overflows.
 
-To learn more and get started, visit https://tinytapeout.com.
+## System Architecture
 
-## Set up your Verilog project
+The design has been optimized to maximize the use of the 1x1 Tile area, reducing routing congestion through:
+1. **Capture Engine:** Signal synchronization and edge-to-edge time measurement.
+2. **Jitter Calculation:** Optimized absolute value implementation to reduce hold buffer requirements.
+3. **Register Bank:** Efficient memory management for Ideal, Tolerance, and error metric parameters.
+4. **UART Controller:** Finite State Machine (FSM) that interprets a serial command protocol.
 
-1. Add your Verilog files to the `src` folder.
-2. Edit the [info.yaml](info.yaml) and update information about your project, paying special attention to the `source_files` and `top_module` properties. If you are upgrading an existing Tiny Tapeout project, check out our [online info.yaml migration tool](https://tinytapeout.github.io/tt-yaml-upgrade-tool/).
-3. Edit [docs/info.md](docs/info.md) and add a description of your project.
-4. Adapt the testbench to your design. See [test/README.md](test/README.md) for more information.
+## Command Protocol (UART)
 
-The GitHub action will automatically build the ASIC files using [LibreLane](https://www.zerotoasiccourse.com/terminology/librelane/).
+The chip listens for commands using the format: `$[COMMAND_CHARACTER][OPTIONAL_DATA]`.
 
-## Enable GitHub actions to build the results page
+### Write Commands (Configuration)
+| Command | Function | Additional Data |
+| :--- | :--- | :--- |
+| `$I` | Set Ideal Time | 2 Bytes (MSB, then LSB) |
+| `$T` | Set Tolerance | 2 Bytes (MSB, then LSB) |
+| `$R` | Reset Metrics | None |
 
-- [Enabling GitHub Pages](https://tinytapeout.com/faq/#my-github-action-is-failing-on-the-pages-part)
+### Read Commands (The chip responds with 2 bytes)
+| Command | Function | Chip Response |
+| :--- | :--- | :--- |
+| `$M` | Read Max Jitter | [MSB][LSB] (15 bits) |
+| `$S` | Read Total Samples | [MSB][LSB] (Saturated at 4095) |
+| `$G` | Read Error Counter | [MSB][LSB] (Saturated at 4095) |
 
-## Resources
+## Pin Configuration
 
-- [FAQ](https://tinytapeout.com/faq/)
-- [Digital design lessons](https://tinytapeout.com/digital_design/)
-- [Learn how semiconductors work](https://tinytapeout.com/siliwiz/)
-- [Join the community](https://tinytapeout.com/discord)
-- [Build your design locally](https://www.tinytapeout.com/guides/local-hardening/)
+| Pin | Name | Type | Description |
+| :--- | :--- | :--- | :--- |
+| `ui_in[0]` | RX | Input | UART Data Input |
+| `ui_in[1]` | sig_in | Input | Signal under test |
+| `ui_in[3]` | gate | Input | Measurement Enable (High = ON) |
+| `ui_in[4]` | ref_clk | Input | External Reference Clock |
+| `uo_out[0]` | TX | Output | UART Data Output |
 
-## What next?
+## How to Test
 
-- [Submit your design to the next shuttle](https://app.tinytapeout.com/).
-- Edit [this README](README.md) and explain your design, how it works, and how to test it.
-- Share your project on your social network of choice:
-  - LinkedIn [#tinytapeout](https://www.linkedin.com/search/results/content/?keywords=%23tinytapeout) [@TinyTapeout](https://www.linkedin.com/company/100708654/)
-  - Mastodon [#tinytapeout](https://chaos.social/tags/tinytapeout) [@matthewvenn](https://chaos.social/@matthewvenn)
-  - X (formerly Twitter) [#tinytapeout](https://twitter.com/hashtag/tinytapeout) [@tinytapeout](https://twitter.com/tinytapeout)
-  - Bluesky [@tinytapeout.com](https://bsky.app/profile/tinytapeout.com)
+1. **Simulation:** Run `make test` to execute the `cocotb` testbench.
+2. **Hardening:** The GitHub Actions workflow will automatically generate the GDS files using OpenLane/LibreLane.
+3. **Real Usage:** Connect a USB-to-Serial adapter at 115200 baud to the designated pins and send configuration commands to start measuring jitter in your signals.
+
+---
+**Author:** Gustavo Ismael Chavez Mamani  
+*Project developed for Tiny Tapeout.*

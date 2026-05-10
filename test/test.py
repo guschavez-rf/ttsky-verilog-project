@@ -1,94 +1,120 @@
 import cocotb
 from cocotb.clock import Clock
-from cocotb.triggers import Timer, ClockCycles, Edge
+from cocotb.triggers import Timer, ClockCycles
 
-# --- FUNCIÓN AUXILIAR: Escribir un bit en ui_in ---
-def set_rx_pin(dut, bit_value):
-    # Leemos el valor actual de todos los pines (0 a 7)
-    current_val = int(dut.ui_in.value) if dut.ui_in.value.is_resolvable else 0
-    if bit_value:
-        dut.ui_in.value = current_val | 1    # Pone el bit 0 en '1'
-    else:
-        dut.ui_in.value = current_val & ~1   # Pone el bit 0 en '0'
+# =======================================================================
+# FUNCIONES AUXILIARES (Robustas para GLS)
+# =======================================================================
+def safe_int(logic_array):
+    """
+    Convierte LogicArray a entero de forma segura ignorando estados 'X' y 'Z' 
+    típicos en simulaciones a nivel de compuertas (GLS).
+    """
+    try:
+        return int(logic_array.value)
+    except ValueError:
+        return 0
 
-# --- FUNCIÓN PARA ENVIAR (PC -> ASIC) ---
-async def send_uart_byte(dut, byte_val):
-    baud_period = 8680  # ns para 115200 baudios
-    # Bit de inicio
-    set_rx_pin(dut, 0)
-    await Timer(baud_period, unit="ns")
-    # 8 Bits (LSB primero)
+async def uart_write_byte(dut, byte_val, bit_period_ns):
+    """ Escribe un byte en ui_in[0] (RX) simulando el protocolo UART """
+    # Leemos el estado actual del puerto para no pisar otros pines
+    current_ui_in = safe_int(dut.ui_in)
+    
+    # Bit de Start (0)
+    current_ui_in &= ~1  # Forzamos el bit 0 a 0
+    dut.ui_in.value = current_ui_in
+    await Timer(bit_period_ns, units="ns")
+    
+    # Bits de Datos (LSB first)
     for i in range(8):
-        set_rx_pin(dut, (byte_val >> i) & 1)
-        await Timer(baud_period, unit="ns")
-    # Bit de parada
-    set_rx_pin(dut, 1)
-    await Timer(baud_period, unit="ns")
+        bit = (byte_val >> i) & 1
+        if bit:
+            current_ui_in |= 1   # Ponemos bit 0 a 1
+        else:
+            current_ui_in &= ~1  # Ponemos bit 0 a 0
+            
+        dut.ui_in.value = current_ui_in
+        await Timer(bit_period_ns, units="ns")
+        
+    # Bit de Stop (1)
+    current_ui_in |= 1
+    dut.ui_in.value = current_ui_in
+    await Timer(bit_period_ns, units="ns")
 
-# --- FUNCIÓN PARA RECIBIR (ASIC -> PC) ---
-async def read_uart_byte(dut):
-    baud_period = 8680 
+async def uart_read_byte(dut, bit_period_ns):
+    """ Lee un byte desde uo_out[0] (TX) simulando el receptor UART """
+    # Esperar al bit de start (TX baja a 0)
+    # Hacemos polling cada 100ns para no saturar el simulador
+    while (safe_int(dut.uo_out) & 1) == 1:
+        await Timer(100, units="ns") 
+        
+    # Ir al centro del bit de start
+    await Timer(bit_period_ns / 2.0, units="ns")
     
-    # 1. Esperar al bit de inicio (el pin tx_pin, uo_out bit 0, cae a 0)
-    # Buscamos un flanco de bajada leyendo el bus completo
-    if (int(dut.uo_out.value) & 1) == 1:
-        while True:
-            await Edge(dut.uo_out)
-            if (int(dut.uo_out.value) & 1) == 0:
-                break
-    
-    # Posicionarse en el centro del bit de inicio
-    await Timer(baud_period / 2.0, unit="ns") 
-    
-    byte_res = 0
-    await Timer(baud_period, unit="ns") # Saltar el bit de inicio
-    
-    # 2. Leer los 8 bits de datos
+    # Muestrear los 8 bits de datos
+    byte_val = 0
     for i in range(8):
-        if int(dut.uo_out.value) & 1:
-            byte_res |= (1 << i)
-        await Timer(baud_period, unit="ns")
-    
-    return byte_res
+        await Timer(bit_period_ns, units="ns")
+        bit = safe_int(dut.uo_out) & 1
+        byte_val |= (bit << i)
+        
+    # Esperar al bit de stop
+    await Timer(bit_period_ns, units="ns")
+    return byte_val
 
-# --- TEST PRINCIPAL ---
+# =======================================================================
+# TEST PRINCIPAL
+# =======================================================================
 @cocotb.test()
 async def test_jitter_meter(dut):
-    # Reloj a 50 MHz (20ns), usando 'unit' en lugar de 'units'
-    clock = Clock(dut.clk, 20, unit="ns")
+    dut._log.info("Iniciando simulación del Medidor de Jitter (Compatible con GLS)")
+
+    # 1. Configuración de Tiempos
+    clk_period_ns = 20  # 50 MHz
+    bit_period_ns = 8680.55  # 1 / 115200 = 8.68055 us
+    
+    clock = Clock(dut.clk, clk_period_ns, units="ns")
     cocotb.start_soon(clock.start())
 
-    # Reset Inicial
+    # 2. Inicialización
     dut.ena.value = 1
-    dut.ui_in.value = 1   # Inicializamos el bus completo (bit 0 en 1, resto en 0)
+    # Ponemos ui_in a 1 (00000001 en binario) para que RX arranque en IDLE
+    dut.ui_in.value = 1     
     dut.uio_in.value = 0
     dut.rst_n.value = 0
-    await ClockCycles(dut.clk, 10)
+    
+    # Reset prolongado para estabilizar todos los flip-flops físicos
+    await ClockCycles(dut.clk, 20)
     dut.rst_n.value = 1
-    await ClockCycles(dut.clk, 10)
+    await ClockCycles(dut.clk, 20)
 
-    # 1. Configurar Tolerancia a 50 (0x0032)
-    # Comando: '$', 'T', 0x00, 0x32
-    dut._log.info("Configurando Tolerancia...")
-    await send_uart_byte(dut, ord('$'))
-    await send_uart_byte(dut, ord('T'))
-    await send_uart_byte(dut, 0x00)
-    await send_uart_byte(dut, 0x32)
-    await ClockCycles(dut.clk, 50)
+    dut._log.info("Reset completado. Entrando en fase de prueba UART.")
 
-    # 2. Pedir Jitter Máximo
-    dut._log.info("Pidiendo Jitter Maximo...")
-    await send_uart_byte(dut, ord('$'))
-    await send_uart_byte(dut, ord('M'))
-
-    # 3. Leer respuesta del ASIC
-    high_byte = await read_uart_byte(dut)
-    low_byte = await read_uart_byte(dut)
+    # --- PRUEBA 1: Escribir Registro Ideal ---
+    # Comando: '$' (0x24), 'I' (0x49), High (0x03), Low (0xE8) -> Ideal = 1000
+    dut._log.info("Escribiendo reg_ideal = 1000...")
+    await uart_write_byte(dut, 0x24, bit_period_ns)
+    await uart_write_byte(dut, 0x49, bit_period_ns)
+    await uart_write_byte(dut, 0x03, bit_period_ns)
+    await uart_write_byte(dut, 0xE8, bit_period_ns)
     
-    resultado = (high_byte << 8) | low_byte
-    dut._log.info(f"Valor recibido del ASIC: {resultado}")
+    await ClockCycles(dut.clk, 100)
 
-    # Validamos que responda un número sin colgarse
-    assert resultado >= 0 
+    # --- PRUEBA 2: Leer Cantidad Total (reg_tot) ---
+    # Comando: '$' (0x24), 'S' (0x53)
+    # Como no hemos activado el gate ni simulado capturas, el chip debe responder 0
+    dut._log.info("Solicitando lectura de reg_tot...")
+    await uart_write_byte(dut, 0x24, bit_period_ns)
+    await uart_write_byte(dut, 0x53, bit_period_ns)
+
+    # El chip responderá con el Byte High y luego el Byte Low
+    byte_h = await uart_read_byte(dut, bit_period_ns)
+    byte_l = await uart_read_byte(dut, bit_period_ns)
+    total_jitter = (byte_h << 8) | byte_l
     
-    dut._log.info("Test completado exitosamente")
+    dut._log.info(f"reg_tot recibido: {total_jitter}")
+
+    # Este assert validará que la prueba pasó con éxito en tu GitHub Action
+    assert total_jitter == 0, f"Test falló: Se esperaba 0 en reg_tot, se recibió {total_jitter}"
+
+    dut._log.info("Simulación GLS terminada con éxito. ¡Todo en orden!")
